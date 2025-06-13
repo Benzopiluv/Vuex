@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Календарь с Vuex</title>
+  <link href="https://fonts.googleapis.com/css?family=Roboto:100,300,400,500,700,900" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/@mdi/font@6.x/css/materialdesignicons.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/vuetify@2.x/dist/vuetify.min.css" rel="stylesheet">
+  <style>[v-cloak] { display: none }</style>
+</head>
+<body>
+  <div id="app" v-cloak>
+    <v-app>
+      <v-main>
+        <v-container>
+          <v-row>
+            <v-col cols="12" md="6">
+              <v-card>
+                <v-card-title class="primary white--text">
+                  <v-icon large left color="white">mdi-calendar</v-icon>
+                  <span class="headline">Мой Календарь</span>
+                  <v-spacer></v-spacer>
+                  <v-btn icon dark @click="today">
+                    <v-icon>mdi-calendar-today</v-icon>
+                  </v-btn>
+                </v-card-title>
+                
+                <v-card-text>
+                  <v-date-picker
+                    v-model="date"
+                    :events="eventDates"
+                    event-color="green lighten-1"
+                    full-width
+                    locale="ru-ru"
+                    @click:date="showEventsForDate"
+                  ></v-date-picker>
+                </v-card-text>
+              </v-card>
+            </v-col>
+
+            <v-col cols="12" md="6">
+              <v-card>
+                <v-card-title class="primary white--text">
+                  <v-icon large left color="white">mdi-format-list-checks</v-icon>
+                  <span class="headline">Список событий ({{ eventsCount }})</span>
+                  <v-spacer></v-spacer>
+                  <v-btn icon dark @click="openDialog">
+                    <v-icon>mdi-plus</v-icon>
+                  </v-btn>
+                </v-card-title>
+
+                <v-card-text>
+                  <v-list v-if="filteredEvents.length" two-line>
+                    <v-list-item-group>
+                      <template v-for="(event, index) in filteredEvents">
+                        <v-list-item :key="event.id" @click="editEvent(event)">
+                          <template v-slot:default="{ active }">
+                            <v-list-item-content>
+                              <v-list-item-title>{{ event.text }}</v-list-item-title>
+                              <v-list-item-subtitle>{{ formatDate(event.date) }}</v-list-item-subtitle>
+                            </v-list-item-content>
+                            <v-list-item-action>
+                              <v-btn icon @click.stop="deleteEvent(event.id)">
+                                <v-icon color="red">mdi-delete</v-icon>
+                              </v-btn>
+                            </v-list-item-action>
+                          </template>
+                        </v-list-item>
+                        <v-divider v-if="index < filteredEvents.length - 1" :key="'divider-' + index"></v-divider>
+                      </template>
+                    </v-list-item-group>
+                  </v-list>
+                  <v-alert v-else type="info" class="ma-4">
+                    Нет событий для отображения
+                  </v-alert>
+                </v-card-text>
+              </v-card>
+            </v-col>
+          </v-row>
+        </v-container>
+
+        <!-- Диалог добавления/редактирования события -->
+        <v-dialog v-model="dialog" max-width="500">
+          <v-card>
+            <v-card-title>
+              {{ isEditing ? 'Редактировать событие' : 'Добавить событие' }}
+            </v-card-title>
+            
+            <v-card-text>
+              <v-text-field v-model="currentEvent.text" label="Описание события"></v-text-field>
+              <v-date-picker v-model="currentEvent.date" full-width></v-date-picker>
+            </v-card-text>
+            
+            <v-card-actions>
+              <v-spacer></v-spacer>
+              <v-btn color="blue darken-1" text @click="closeDialog">Отмена</v-btn>
+              <v-btn color="blue darken-1" text @click="saveEvent">Сохранить</v-btn>
+            </v-card-actions>
+          </v-card>
+        </v-dialog>
+      </v-main>
+    </v-app>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/vue@2.x/dist/vue.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vuex@3.x/dist/vuex.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vuetify@2.x/dist/vuetify.js"></script>
+  <script>
+    // Хранилище Vuex
+    const store = new Vuex.Store({
+      state: {
+        events: [
+          { id: 1, date: new Date().toISOString().substr(0, 10), text: 'Сегодняшнее событие' },
+          { id: 2, date: new Date(Date.now() + 86400000).toISOString().substr(0, 10), text: 'Событие завтра' },
+          { id: 3, date: '2023-12-25', text: 'Рождество' }
+        ]
+      },
+      mutations: {
+        ADD_EVENT(state, event) {
+          state.events.push({
+            id: Date.now(),
+            ...event
+          });
+        },
+        UPDATE_EVENT(state, { id, event }) {
+          const index = state.events.findIndex(e => e.id === id);
+          if (index !== -1) {
+            state.events.splice(index, 1, { id, ...event });
+          }
+        },
+        DELETE_EVENT(state, id) {
+          state.events = state.events.filter(event => event.id !== id);
+        }
+      },
+      actions: {
+        addEvent({ commit }, event) {
+          commit('ADD_EVENT', event);
+        },
+        updateEvent({ commit }, { id, event }) {
+          commit('UPDATE_EVENT', { id, event });
+        },
+        deleteEvent({ commit }, id) {
+          commit('DELETE_EVENT', id);
+        }
+      },
+      getters: {
+        allEvents: state => state.events,
+        eventsCount: state => state.events.length,
+        eventsByDate: state => date => {
+          return state.events.filter(event => event.date === date);
+        }
+      }
+    });
+
+    // Vue приложение
+    new Vue({
+      el: '#app',
+      store,
+      vuetify: new Vuetify({
+        theme: { dark: false }
+      }),
+      data: () => ({
+        date: new Date().toISOString().substr(0, 10),
+        selectedDate: null,
+        dialog: false,
+        isEditing: false,
+        currentEvent: {
+          id: null,
+          date: new Date().toISOString().substr(0, 10),
+          text: ''
+        }
+      }),
+      computed: {
+        ...Vuex.mapGetters([
+          'allEvents',
+          'eventsCount',
+          'eventsByDate'
+        ]),
+        eventDates() {
+          return this.allEvents.map(event => event.date);
+        },
+        filteredEvents() {
+          if (!this.selectedDate) return this.allEvents;
+          return this.eventsByDate(this.selectedDate);
+        }
+      },
+      methods: {
+        ...Vuex.mapActions([
+          'addEvent',
+          'updateEvent',
+          'deleteEvent'
+        ]),
+        today() {
+          this.date = new Date().toISOString().substr(0, 10);
+          this.selectedDate = this.date;
+        },
+        showEventsForDate(date) {
+          this.selectedDate = date;
+        },
+        formatDate(date) {
+          return new Date(date).toLocaleDateString('ru-RU');
+        },
+        openDialog() {
+          this.currentEvent = {
+            id: null,
+            date: this.selectedDate || new Date().toISOString().substr(0, 10),
+            text: ''
+          };
+          this.isEditing = false;
+          this.dialog = true;
+        },
+        editEvent(event) {
+          this.currentEvent = { ...event };
+          this.isEditing = true;
+          this.dialog = true;
+        },
+        saveEvent() {
+          if (this.isEditing) {
+            this.updateEvent({
+              id: this.currentEvent.id,
+              event: {
+                date: this.currentEvent.date,
+                text: this.currentEvent.text
+              }
+            });
+          } else {
+            this.addEvent({
+              date: this.currentEvent.date,
+              text: this.currentEvent.text
+            });
+          }
+          this.closeDialog();
+        },
+        closeDialog() {
+          this.dialog = false;
+        },
+        deleteEvent(id) {
+          if (confirm('Удалить это событие?')) {
+            this.deleteEvent(id);
+          }
+        }
+      },
+      created() {
+        this.selectedDate = this.date;
+      }
+    });
+  </script>
+</body>
+</html>
